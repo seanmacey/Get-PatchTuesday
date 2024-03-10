@@ -1,0 +1,109 @@
+Function Get-PatchTuesday {
+  <#
+.SYNOPSIS
+  Finds the date of the second Tuesday of the current month.
+.DESCRIPTION
+  Patching is important, but automating updates can be difficult due to patching releases on the second Tuesday of the month.  
+  The code below is an example of how to identify the date of the second Tuesday for a given month.
+  It's purpose is to use in scripts to schedule maintenance windows for patching.
+  The script will output the second Tuesday of the month by default.
+  Optionally, you can pass in a week day and an instance count to find what date that day falls on.
+  .PARAMETER weekday
+    input the weekname in full , i.e. Tuesday
+    Tuesday is the default, this decribes whcih day of the week will be searched for
+    
+  .PARAMETER findNthDay
+  finds the nth occurance of the weekday parameter, from the begging of the target month
+  default is to find the 2nd occurance
+
+  .PARAMETER MonthOf
+  defaults to the current date. - so the search defaults to find the current months patch tuesday
+  this will search in respect of the month parft of the datetime entered here
+  .PARAMETER findDateInFuture
+  if this switch is set $true then, then if the patchtuesday would be in the past, the next future patch tuesday is returned
+  this will ensure that a FUTURE date will be selected. (i.e. not the date of the date for this month if the current date is newer than that day)
+
+  .OUTPUTS 
+  The date of patch Tuesday.
+  If given optioaly parameters, it will find the “X” instance of a day of the week.
+
+
+  .EXAMPLE
+  Get Patch Tuesday for the month
+  Get-PatchTuesday
+
+  Is MonthOf Patch Tuesday?
+  (get-date).Day -eq (Get-PatchTuesday).day
+
+  Get 5 days after path Tuesday
+  (Get-PatchTuesday).AddDays(5)
+
+  Get-PatchTuesday  -MonthOf $(get-date).AddMonths(-1) #-verbose  
+  Get-PatchTuesday  -MonthOf $(get-date) -findDateInFuture -findNthDay 3
+  Get-PatchTuesday  -MonthOf $(get-date).AddMonths(3) -weekDay Tuesday
+
+# Get the 3rd wednesday of the month
+Get-PatchTuesday -weekDay Wednesday -findNthDay 3
+.NOTES
+  Version:        1.0
+  Author:         Travis Roberts
+  Creation Date:  9/8/2020
+  Website         www.ciraltos.com
+  Purpose/Change: Function to find the second Tuesday of the month, or the "X" instance of a weekDay in the current month.
+  
+  Modified by Sean Macey 28 Aug 2021 to improve international handling of date strings and allow for months from current date
+  ***This script is offered as-is with no warranty, expressed or implied.  Test it before you trust it.***
+#>
+    [CmdletBinding()]
+    Param
+    (
+        [Parameter(position = 0)]
+        [ValidateSet("Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday")]
+        [String]$weekDay = 'Tuesday',
+        [ValidateRange(0, 5)]
+        [Parameter(position = 1)]
+        [int]$findNthDay = 2,
+        [Parameter(position = 3)]
+        [datetime]$MonthOf,
+        [switch]$findDateInFuture
+
+    )
+    # Get the date and find the first day of the month
+    # Find the first instance of the given weekday
+    $dtnow = get-date
+    If (!$MonthOf)
+    {
+        $MonthOf = $dtnow
+    }
+   
+    if (($findDateInFuture -eq $true) -and (($dtnow- $MonthOf).Days) -gt 0)
+    {
+        $MonthOf = $dtnow
+    }
+    $MonthOfM = $MonthOf.Month.ToString()
+    $MonthOfY = $MonthOf.Year.ToString()
+    [datetime]$startMonth = get-date -day 1 -month $MonthOfM -year $MonthOfY
+    $startMonth = $startMonth.AddMonths($MonthsFromNow)
+    write-verbose "start of month is $($startMonth.tostring("yyyyMMdd"))"
+    $firstWeekDay = $startMonth
+    while ($firstWeekDay.DayofWeek -ine $weekDay ) {
+        $firstWeekDay = $firstWeekDay.AddDays(1)
+    }
+    write-verbose "first occurance of $weekday is $($firstWeekDay.tostring("yyyyMMdd"))"
+    # Identify and calculate the day offset
+    $dayOffset = (($findNthDay - 1) * 7   )
+    # Return date of the day/instance specified
+    $patchTuesday = $firstWeekDay.AddDays($dayOffset) 
+    Write-verbose "patch $weekday is $($patchTuesday.tostring("yyyyMMdd"))"
+    if (($findDateInFuture -eq $true)  -and (($dtnow- $patchTuesday).Days -gt 0))
+{
+    $patchTuesday = Get-PatchTuesday -MonthOf $MonthOf.AddMonths(1) -weekDay $weekDay -findNthDay $findNthDay
+}
+    return $patchTuesday
+}
+<#
+Get-PatchTuesday  -MonthOf $(get-date).AddMonths(-1) #-verbose
+Get-PatchTuesday  
+Get-PatchTuesday  -MonthOf $(get-date) -findDateInFuture -findNthDay 3
+Get-PatchTuesday  -MonthOf $(get-date).AddMonths(3) -weekDay Tuesday
+#>
